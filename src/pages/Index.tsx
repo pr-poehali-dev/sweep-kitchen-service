@@ -49,17 +49,19 @@ const TAG_LABELS: Record<string, string> = {
 };
 
 function getLoadColor(load: number): string {
-  if (load <= 30) return "hsl(120 60% 42%)";
-  if (load <= 60) return "hsl(224 90% 54%)";
-  if (load <= 85) return "hsl(16 90% 52%)";
+  if (load === 0) return "hsl(220 10% 18%)";
+  if (load <= 40) return "hsl(120 60% 42%)";
+  if (load <= 70) return "hsl(43 96% 52%)";
+  if (load <= 89) return "hsl(16 90% 52%)";
   return "hsl(0 72% 50%)";
 }
 
-function getLoadLabel(load: number): { label: string; cls: string } {
-  if (load <= 30) return { label: "Спокойно", cls: "text-peak-low" };
-  if (load <= 60) return { label: "Умеренно", cls: "text-peak-mid" };
-  if (load <= 85) return { label: "Загружено", cls: "text-peak-high" };
-  return { label: "ПИК", cls: "text-peak-critical" };
+function getLoadLabel(load: number): { label: string; cls: string; color: string } {
+  if (load === 0) return { label: "Нет данных", cls: "text-muted-foreground", color: "hsl(220 10% 18%)" };
+  if (load <= 40) return { label: "Спокойно", cls: "text-peak-low", color: "hsl(120 60% 42%)" };
+  if (load <= 70) return { label: "Умеренно", cls: "text-peak-mid", color: "hsl(43 96% 52%)" };
+  if (load <= 89) return { label: "Загружено", cls: "text-peak-high", color: "hsl(16 90% 52%)" };
+  return { label: "ПИК", cls: "text-peak-critical", color: "hsl(0 72% 50%)" };
 }
 
 function getNow() {
@@ -126,13 +128,13 @@ function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
         </div>
         <div className="flex items-center gap-3">
           {[
-            { label: "Спокойно", cls: "bg-peak-low" },
-            { label: "Умеренно", cls: "bg-peak-mid" },
-            { label: "Загружено", cls: "bg-peak-high" },
-            { label: "Пик", cls: "bg-peak-critical" },
+            { label: "До 40%", color: "hsl(120 60% 42%)" },
+            { label: "До 70%", color: "hsl(43 96% 52%)" },
+            { label: "До 89%", color: "hsl(16 90% 52%)" },
+            { label: "Пик 90%+", color: "hsl(0 72% 50%)" },
           ].map((l) => (
             <span key={l.label} className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
-              <span className={`w-2 h-2 rounded-full ${l.cls} inline-block`}></span>{l.label}
+              <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: l.color }}></span>{l.label}
             </span>
           ))}
         </div>
@@ -148,7 +150,7 @@ function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
           ))}
         </div>
 
-        <div className="absolute left-9 right-0 bottom-0 top-0 flex items-end gap-1 pb-6">
+        <div className="absolute left-9 right-0 bottom-0 top-0 flex items-end gap-1 pb-6 pt-5">
           {HOURS.map((h, i) => {
             const load = hourlyLoad[String(h)] ?? 0;
             const heightPct = (load / maxLoad) * 100;
@@ -159,20 +161,26 @@ function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
             return (
               <div key={h} className="flex-1 flex flex-col items-center justify-end h-full group cursor-default relative">
                 <div
-                  className="w-full rounded-t-[2px] relative transition-all duration-200 group-hover:brightness-125"
+                  className="w-full rounded-t-[2px] relative transition-all duration-200 group-hover:brightness-110"
                   style={{
                     height: `${heightPct}%`,
                     backgroundColor: color,
-                    opacity: isPast ? 0.3 : 1,
+                    opacity: isPast ? 0.35 : 1,
                     animationDelay: `${i * 40}ms`,
+                    minHeight: load > 0 ? "4px" : "0",
                   }}
                 >
                   {isCurrent && (
                     <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white pulse-dot" />
                   )}
-                  <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[hsl(220_14%_12%)] border border-border rounded px-1.5 py-0.5 text-[10px] font-mono text-foreground whitespace-nowrap z-20">
-                    {load}% — {h}:00
-                  </div>
+                  {load > 0 && (
+                    <div
+                      className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-mono font-bold whitespace-nowrap leading-none"
+                      style={{ color: color, opacity: isPast ? 0.5 : 1 }}
+                    >
+                      {load}%
+                    </div>
+                  )}
                 </div>
                 <span className={`absolute bottom-0 text-[10px] font-mono ${isCurrent ? "text-primary font-bold" : "text-muted-foreground"}`}>
                   {h}
@@ -449,7 +457,7 @@ export default function Index() {
       <div className="flex-1 grid grid-cols-[1fr_320px] overflow-hidden">
         {/* Left: Chart + Active */}
         <div className="flex flex-col border-r border-border overflow-hidden">
-          <div className="p-5 border-b border-border shrink-0" style={{ height: "240px" }}>
+          <div className="p-5 border-b border-border shrink-0" style={{ height: "320px" }}>
             <LoadChart hourlyLoad={hourlyLoad} />
           </div>
 
