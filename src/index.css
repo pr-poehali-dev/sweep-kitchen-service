@@ -13,8 +13,8 @@
     --popover: 220 14% 10%;
     --popover-foreground: 40 20% 92%;
 
-    --primary: 43 96% 56%;
-    --primary-foreground: 220 16% 7%;
+    --primary: 224 90% 54%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 220 12% 14%;
     --secondary-foreground: 40 20% 78%;
@@ -30,22 +30,22 @@
 
     --border: 220 10% 16%;
     --input: 220 10% 16%;
-    --ring: 43 96% 56%;
+    --ring: 224 90% 54%;
 
     --radius: 0.25rem;
 
     --sidebar-background: 220 16% 7%;
     --sidebar-foreground: 40 20% 92%;
-    --sidebar-primary: 43 96% 56%;
-    --sidebar-primary-foreground: 220 16% 7%;
+    --sidebar-primary: 224 90% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 12% 14%;
     --sidebar-accent-foreground: 40 20% 92%;
     --sidebar-border: 220 10% 16%;
-    --sidebar-ring: 43 96% 56%;
+    --sidebar-ring: 224 90% 54%;
 
     /* Kitchen custom vars */
     --peak-low: 120 60% 42%;
-    --peak-mid: 43 96% 56%;
+    --peak-mid: 224 90% 54%;
     --peak-high: 16 90% 52%;
     --peak-critical: 0 72% 50%;
 

@@ -50,7 +50,7 @@ const TAG_LABELS: Record<string, string> = {
 
 function getLoadColor(load: number): string {
   if (load <= 30) return "hsl(120 60% 42%)";
-  if (load <= 60) return "hsl(43 96% 56%)";
+  if (load <= 60) return "hsl(224 90% 54%)";
   if (load <= 85) return "hsl(16 90% 52%)";
   return "hsl(0 72% 50%)";
 }
@@ -193,7 +193,7 @@ function BookingRow({ r, delay }: { r: Reserve; delay: number }) {
     <div
       className={`grid grid-cols-[52px_1fr_10px] gap-3 px-3 py-2.5 rounded-sm border transition-all duration-200 animate-slide-up ${
         isActive
-          ? "border-[hsl(43_60%_30%)] bg-[hsl(43_60%_8%/0.6)]"
+          ? "border-[hsl(224_60%_35%)] bg-[hsl(224_60%_10%/0.6)]"
           : "border-border bg-transparent hover:bg-[hsl(220_12%_12%)]"
       }`}
       style={{ animationDelay: `${delay}ms` }}
@@ -209,8 +209,8 @@ function BookingRow({ r, delay }: { r: Reserve; delay: number }) {
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="font-semibold text-sm text-foreground truncate">{r.name || "—"}</span>
           {r.tags.map((tag) => (
-            <span key={tag} className="flex items-center gap-1 bg-[hsl(43_50%_14%)] px-1 py-0.5 rounded-sm shrink-0">
-              <span className="text-[9px] text-peak-mid font-medium">{TAG_LABELS[tag] ?? tag}</span>
+            <span key={tag} className="flex items-center gap-1 bg-[hsl(224_50%_16%)] px-1 py-0.5 rounded-sm shrink-0">
+              <span className="text-[9px] text-primary font-medium">{TAG_LABELS[tag] ?? tag}</span>
             </span>
           ))}
         </div>
@@ -308,7 +308,7 @@ export default function Index() {
       notifs.push({
         id: 3,
         text: `Синхронизировано с RESTOPLACE · ${now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`,
-        type: "info",
+        type: "info" as const,
       });
 
       setNotifications(notifs);
@@ -345,9 +345,11 @@ export default function Index() {
       <header className="flex items-center justify-between px-5 py-3 border-b border-border bg-[hsl(220_16%_7%)] shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-sm bg-primary flex items-center justify-center">
-              <Icon name="ChefHat" size={14} className="text-primary-foreground" />
-            </div>
+            <img
+              src="https://cdn.poehali.dev/projects/71ed05c8-ef08-47c4-bfdb-75714b4901c5/bucket/e76c95a0-0f60-47e0-8992-604a8a445990.png"
+              alt="Sweep"
+              className="w-7 h-7 object-contain rounded-sm"
+            />
             <div className="flex items-baseline">
               <span className="font-black text-base text-foreground tracking-tight">SWEEP</span>
               <span className="font-black text-base text-primary tracking-tight ml-1">KITCHEN</span>
@@ -454,7 +456,7 @@ export default function Index() {
           <div className="flex-1 p-5 overflow-auto">
             <div className="flex items-center justify-between mb-3">
               <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Сейчас в зале</span>
-              <span className="font-mono text-xs font-bold text-peak-mid bg-[hsl(43_60%_12%)] px-2 py-0.5 rounded-sm">
+              <span className="font-mono text-xs font-bold text-primary bg-[hsl(224_60%_12%)] px-2 py-0.5 rounded-sm">
                 {activeReserves.length}
               </span>
             </div>
@@ -479,7 +481,7 @@ export default function Index() {
         <div className="flex flex-col overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Предстоящие</span>
-            <span className="font-mono text-xs font-bold text-primary bg-[hsl(43_60%_12%)] px-2 py-0.5 rounded-sm">
+            <span className="font-mono text-xs font-bold text-primary bg-[hsl(224_60%_12%)] px-2 py-0.5 rounded-sm">
               {upcomingReserves.length}
             </span>
           </div>
