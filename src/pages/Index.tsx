@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 
 const API_URL = "https://functions.poehali.dev/0bff2ffe-38a1-4586-a21d-17a71ef8329c";
-const AUTH_URL = "https://functions.poehali.dev/899f3d7c-3e17-42ed-b31d-4d4e2126d50f";
+const AUTH_URL = "https://functions.poehali.dev/07ca1f2c-9e8f-448d-9162-14636eddcc62";
 const AUTH_KEY = "sweep_kitchen_auth";
 
 const HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];

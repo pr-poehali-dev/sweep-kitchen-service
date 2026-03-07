@@ -1,9 +1,10 @@
 {
   "tests": [
     {
-      "name": "Проверка эндпоинта отчёта",
-      "method": "GET",
-      "path": "/?day=today",
+      "name": "Ping webhook POST",
+      "method": "POST",
+      "path": "/",
+      "body": {},
       "expectedStatus": 200,
       "expectedBody": {"ok": true},
       "bodyMatcher": "partial"
