@@ -45,6 +45,11 @@ def fetch_reserves(query_date: str) -> list:
 
 
 def build_hourly_load(reserves: list) -> dict:
+    """
+    Считаем сколько гостей физически сидит в зале в каждый час.
+    Гость присутствует в часе H если: time_from < H+1:00 AND time_to > H:00
+    То есть бронь пересекается с интервалом [H:00, H+1:00).
+    """
     hourly_guests: dict[int, int] = {}
     active_statuses = {1, 2, 3, 4}
 
@@ -56,13 +61,22 @@ def build_hourly_load(reserves: list) -> dict:
             dt_to = datetime.strptime(r["time_to"], "%Y-%m-%d %H:%M:%S")
         except Exception:
             continue
+
         count = r.get("count", 0)
-        hour = dt_from.hour
-        while hour < dt_to.hour or (dt_to.minute > 0 and hour <= dt_to.hour):
-            hourly_guests[hour] = hourly_guests.get(hour, 0) + count
-            hour += 1
-            if hour >= 24:
-                break
+        if count <= 0:
+            continue
+
+        # from_minutes и to_minutes — в минутах от полуночи
+        from_min = dt_from.hour * 60 + dt_from.minute
+        to_min = dt_to.hour * 60 + dt_to.minute
+
+        # Если бронь заканчивается ровно в начале часа (напр. 23:00) — не считаем этот час
+        for h in range(10, 24):
+            slot_start = h * 60       # начало часа в минутах
+            slot_end = (h + 1) * 60   # конец часа в минутах
+            # Гость присутствует если бронь пересекает этот часовой слот
+            if from_min < slot_end and to_min > slot_start:
+                hourly_guests[h] = hourly_guests.get(h, 0) + count
 
     if not hourly_guests:
         return {}
