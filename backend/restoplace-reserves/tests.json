@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "name": "Получение бронирований за сегодня",
+      "method": "GET",
+      "path": "/?date=2026-03-07",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "date": "2026-03-07"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

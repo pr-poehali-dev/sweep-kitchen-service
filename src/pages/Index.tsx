@@ -1,34 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+
+const API_URL = "https://functions.poehali.dev/0bff2ffe-38a1-4586-a21d-17a71ef8329c";
 
 const HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
 
-const LOAD_DATA: Record<number, number> = {
-  10: 12, 11: 28, 12: 72, 13: 95, 14: 88, 15: 60,
-  16: 42, 17: 38, 18: 78, 19: 100, 20: 96, 21: 82, 22: 55, 23: 24,
+interface Reserve {
+  id: number;
+  reserve_id: number;
+  time: string;
+  name: string;
+  guests: number;
+  table: string;
+  item_type: string;
+  is_banquet: boolean;
+  status_code: number;
+  status: string;
+  status_label: string;
+  is_active: boolean;
+  comment: string;
+  tags: string[];
+  phone: string;
+  success: boolean;
+  deposit_paid: number;
+}
+
+interface Stats {
+  total_bookings: number;
+  total_guests_now: number;
+  floors: string[];
+}
+
+interface ApiResponse {
+  date: string;
+  reserves: Reserve[];
+  hourly_load: Record<string, number>;
+  stats: Stats;
+}
+
+const TAG_LABELS: Record<string, string> = {
+  birthday: "ДР",
+  alcohol: "Алкоголь",
+  corkage: "Своё вино",
+  not_transplant: "Не пересаживать",
+  vegan: "Веган",
+  vegetarian: "Вегетарианец",
+  allergy: "Аллергия",
 };
-
-const BOOKINGS = [
-  { id: 1, time: "12:00", name: "Иванов А.", guests: 4, table: "Стол 3", status: "active", comment: "Аллергия на орехи" },
-  { id: 2, time: "12:30", name: "Корпоратив ООО Альфа", guests: 12, table: "Банкет", status: "active", comment: "" },
-  { id: 3, time: "13:00", name: "Петрова М.", guests: 2, table: "Стол 7", status: "upcoming", comment: "Вегетарианцы" },
-  { id: 4, time: "13:30", name: "Смирнов В.", guests: 6, table: "Терраса", status: "upcoming", comment: "" },
-  { id: 5, time: "14:00", name: "Захарова Е.", guests: 3, table: "Стол 1", status: "upcoming", comment: "ДР, торт!" },
-  { id: 6, time: "15:00", name: "Козлов Р.", guests: 8, table: "VIP", status: "upcoming", comment: "Постоянный гость" },
-  { id: 7, time: "19:00", name: "Новикова С.", guests: 2, table: "Стол 5", status: "upcoming", comment: "" },
-  { id: 8, time: "19:30", name: "Бизнес-ужин", guests: 5, table: "Кабинет", status: "upcoming", comment: "" },
-];
-
-const TABLES = [
-  { id: 1, name: "Стол 1", capacity: 4, status: "booked", load: 75 },
-  { id: 2, name: "Стол 3", capacity: 4, status: "busy", load: 100 },
-  { id: 3, name: "Стол 5", capacity: 2, status: "free", load: 0 },
-  { id: 4, name: "Стол 7", capacity: 2, status: "free", load: 0 },
-  { id: 5, name: "Терраса", capacity: 8, status: "booked", load: 75 },
-  { id: 6, name: "Банкет", capacity: 20, status: "busy", load: 60 },
-  { id: 7, name: "VIP", capacity: 10, status: "booked", load: 80 },
-  { id: 8, name: "Кабинет", capacity: 6, status: "free", load: 0 },
-];
 
 function getLoadColor(load: number): string {
   if (load <= 30) return "hsl(120 60% 42%)";
@@ -44,18 +62,6 @@ function getLoadLabel(load: number): { label: string; cls: string } {
   return { label: "ПИК", cls: "text-peak-critical" };
 }
 
-function getTableStatusColor(status: string): string {
-  if (status === "free") return "hsl(220 12% 11%)";
-  if (status === "booked") return "hsl(43 60% 12%)";
-  return "hsl(16 50% 13%)";
-}
-
-function getTableStatusLabel(status: string): { label: string; cls: string } {
-  if (status === "free") return { label: "Свободен", cls: "text-muted-foreground" };
-  if (status === "booked") return { label: "Забронирован", cls: "text-peak-mid" };
-  return { label: "Занят", cls: "text-peak-high" };
-}
-
 function getNow() {
   const now = new Date();
   return now.getHours() + now.getMinutes() / 60;
@@ -68,6 +74,10 @@ function useCurrentTime() {
     return () => clearInterval(interval);
   }, []);
   return time;
+}
+
+function getTodayStr() {
+  return new Date().toISOString().split("T")[0];
 }
 
 interface NotificationItem {
@@ -96,11 +106,12 @@ function Notification({ text, type, onClose }: { text: string; type: "info" | "w
   );
 }
 
-function LoadChart() {
+function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
   const now = getNow();
-  const maxLoad = Math.max(...Object.values(LOAD_DATA));
+  const values = HOURS.map((h) => hourlyLoad[String(h)] ?? 0);
+  const maxLoad = Math.max(...values, 1);
   const currentHour = Math.floor(now);
-  const currentLoad = LOAD_DATA[currentHour] || 0;
+  const currentLoad = hourlyLoad[String(currentHour)] ?? 0;
   const { label: currentLabel, cls: currentCls } = getLoadLabel(currentLoad);
 
   return (
@@ -139,7 +150,7 @@ function LoadChart() {
 
         <div className="absolute left-9 right-0 bottom-0 top-0 flex items-end gap-1 pb-6">
           {HOURS.map((h, i) => {
-            const load = LOAD_DATA[h] || 0;
+            const load = hourlyLoad[String(h)] ?? 0;
             const heightPct = (load / maxLoad) * 100;
             const color = getLoadColor(load);
             const isPast = h < Math.floor(now);
@@ -175,8 +186,9 @@ function LoadChart() {
   );
 }
 
-function BookingRow({ b, delay }: { b: typeof BOOKINGS[0]; delay: number }) {
-  const isActive = b.status === "active";
+function BookingRow({ r, delay }: { r: Reserve; delay: number }) {
+  const isActive = r.is_active;
+
   return (
     <div
       className={`grid grid-cols-[52px_1fr_10px] gap-3 px-3 py-2.5 rounded-sm border transition-all duration-200 animate-slide-up ${
@@ -187,28 +199,35 @@ function BookingRow({ b, delay }: { b: typeof BOOKINGS[0]; delay: number }) {
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex flex-col justify-center">
-        <span className={`font-mono font-bold text-sm leading-tight ${isActive ? "text-primary" : "text-foreground"}`}>{b.time}</span>
-        {isActive && <span className="text-[9px] uppercase tracking-widest text-peak-mid font-bold">сейчас</span>}
+        <span className={`font-mono font-bold text-sm leading-tight ${isActive ? "text-primary" : "text-foreground"}`}>{r.time}</span>
+        <span className={`text-[9px] uppercase tracking-widest font-bold ${isActive ? "text-peak-mid" : "text-muted-foreground/60"}`}>
+          {r.status_label}
+        </span>
       </div>
 
       <div className="flex flex-col justify-center min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-semibold text-sm text-foreground truncate">{b.name}</span>
-          {b.comment && (
-            <span className="flex items-center gap-1 bg-[hsl(43_50%_14%)] px-1 py-0.5 rounded-sm shrink-0">
-              <Icon name="AlertCircle" size={9} className="text-peak-mid" />
-              <span className="text-[9px] text-peak-mid font-medium max-w-[100px] truncate">{b.comment}</span>
+          <span className="font-semibold text-sm text-foreground truncate">{r.name || "—"}</span>
+          {r.tags.map((tag) => (
+            <span key={tag} className="flex items-center gap-1 bg-[hsl(43_50%_14%)] px-1 py-0.5 rounded-sm shrink-0">
+              <span className="text-[9px] text-peak-mid font-medium">{TAG_LABELS[tag] ?? tag}</span>
             </span>
-          )}
+          ))}
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Icon name="Users" size={10} />{b.guests} гостей
+            <Icon name="Users" size={10} />{r.guests} гостей
           </span>
           <span className="text-muted-foreground/40">·</span>
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Icon name="MapPin" size={10} />{b.table}
+            <Icon name="MapPin" size={10} />{r.table}
           </span>
+          {r.comment && (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span className="text-[11px] text-muted-foreground/70 italic truncate max-w-[110px]">{r.comment}</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -219,63 +238,106 @@ function BookingRow({ b, delay }: { b: typeof BOOKINGS[0]; delay: number }) {
   );
 }
 
-function TableCard({ t, delay }: { t: typeof TABLES[0]; delay: number }) {
-  const { label, cls } = getTableStatusLabel(t.status);
-
+function SkeletonRows() {
   return (
-    <div
-      className="rounded-sm border border-border p-3 flex flex-col gap-2 animate-fade-in hover:border-[hsl(220_10%_22%)] transition-all cursor-default"
-      style={{ animationDelay: `${delay}ms`, backgroundColor: getTableStatusColor(t.status) }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="font-bold text-sm text-foreground">{t.name}</span>
-        <span className="text-[10px] font-mono text-muted-foreground">{t.capacity}м</span>
-      </div>
-      <span className={`text-[10px] font-semibold uppercase tracking-wider ${cls}`}>{label}</span>
-      {t.load > 0 && (
-        <div className="h-px bg-[hsl(220_10%_20%)] rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${t.load}%`, backgroundColor: getLoadColor(t.load) }}
-          />
+    <>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className="px-3 py-2.5 rounded-sm border border-border bg-[hsl(220_12%_10%)] animate-pulse"
+          style={{ animationDelay: `${i * 80}ms` }}
+        >
+          <div className="flex gap-3">
+            <div className="w-12 h-8 rounded bg-[hsl(220_10%_16%)]" />
+            <div className="flex-1 flex flex-col gap-1.5">
+              <div className="h-3.5 w-28 rounded bg-[hsl(220_10%_16%)]" />
+              <div className="h-2.5 w-20 rounded bg-[hsl(220_10%_14%)]" />
+            </div>
+          </div>
         </div>
-      )}
-    </div>
+      ))}
+    </>
   );
 }
 
 export default function Index() {
   const time = useCurrentTime();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    { id: 1, text: "Пик загрузки ожидается в 19:00–20:00 (100%)", type: "crit" },
-    { id: 2, text: "Корпоратив на 12 чел. начинается через 30 мин", type: "warn" },
-    { id: 3, text: "Синхронизировано с RESTOPLACE · 2 мин назад", type: "info" },
-  ]);
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState("2 мин назад");
+  const [lastSync, setLastSync] = useState<string>("—");
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
-  const removeNotification = (id: number) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
+  const fetchData = useCallback(async (showSyncing = false) => {
+    if (showSyncing) setSyncing(true);
+    try {
+      const today = getTodayStr();
+      const res = await fetch(`${API_URL}?date=${today}`);
+      const json: ApiResponse = await res.json();
+      setData(json);
+      setError(null);
 
-  const handleSync = () => {
-    setSyncing(true);
-    setTimeout(() => {
-      setSyncing(false);
-      setLastSync("только что");
-      setNotifications((prev) => {
-        const filtered = prev.filter((n) => n.type !== "info");
-        return [{ id: Date.now(), text: "Синхронизировано с RESTOPLACE · только что", type: "info" as const }, ...filtered];
+      const now = new Date();
+      setLastSync(now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+
+      const notifs: NotificationItem[] = [];
+
+      const loadEntries = Object.entries(json.hourly_load);
+      if (loadEntries.length > 0) {
+        const peakEntry = loadEntries.reduce((max, cur) => (cur[1] > max[1] ? cur : max));
+        if (peakEntry[1] >= 85) {
+          notifs.push({ id: 1, text: `Пик загрузки в ${peakEntry[0]}:00 — ${peakEntry[1]}%`, type: "crit" });
+        }
+      }
+
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const upcoming30 = json.reserves.filter((r) => {
+        const [hh, mm] = r.time.split(":").map(Number);
+        const diff = hh * 60 + mm - nowMin;
+        return diff > 0 && diff <= 30 && r.guests >= 5;
       });
-    }, 1800);
-  };
+      if (upcoming30.length > 0) {
+        notifs.push({
+          id: 2,
+          text: `${upcoming30[0].name} — ${upcoming30[0].guests} гостей через ~30 мин`,
+          type: "warn",
+        });
+      }
 
-  const activeBookings = BOOKINGS.filter((b) => b.status === "active");
-  const totalGuests = activeBookings.reduce((s, b) => s + b.guests, 0);
-  const freeTables = TABLES.filter((t) => t.status === "free").length;
-  const peakLoad = Math.max(...Object.values(LOAD_DATA));
-  const currentHour = Math.floor(getNow());
-  const currentLoad = LOAD_DATA[currentHour] || 0;
+      notifs.push({
+        id: 3,
+        text: `Синхронизировано с RESTOPLACE · ${now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`,
+        type: "info",
+      });
+
+      setNotifications(notifs);
+    } catch {
+      setError("Не удалось получить данные из RESTOPLACE");
+    } finally {
+      setLoading(false);
+      setSyncing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => fetchData(), 60_000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  const removeNotification = (id: number) => setNotifications((prev) => prev.filter((n) => n.id !== id));
+
+  const reserves = data?.reserves ?? [];
+  const hourlyLoad = data?.hourly_load ?? {};
+  const stats = data?.stats ?? { total_bookings: 0, total_guests_now: 0, floors: [] };
+
+  const loadValues = Object.values(hourlyLoad);
+  const peakLoad = loadValues.length > 0 ? Math.max(...loadValues) : 0;
+  const peakHour = Object.entries(hourlyLoad).find(([, v]) => v === peakLoad)?.[0] ?? "—";
+
+  const activeReserves = reserves.filter((r) => r.is_active);
+  const upcomingReserves = reserves.filter((r) => !r.is_active);
 
   return (
     <div className="min-h-screen bg-background font-golos flex flex-col overflow-hidden" style={{ height: "100dvh" }}>
@@ -286,9 +348,9 @@ export default function Index() {
             <div className="w-7 h-7 rounded-sm bg-primary flex items-center justify-center">
               <Icon name="ChefHat" size={14} className="text-primary-foreground" />
             </div>
-            <div className="flex items-baseline gap-0.5">
+            <div className="flex items-baseline">
               <span className="font-black text-base text-foreground tracking-tight">SWEEP</span>
-              <span className="font-black text-base text-primary tracking-tight ml-1"> KITCHEN</span>
+              <span className="font-black text-base text-primary tracking-tight ml-1">KITCHEN</span>
             </div>
           </div>
           <div className="h-3.5 w-px bg-border" />
@@ -306,16 +368,16 @@ export default function Index() {
           </div>
 
           <button
-            onClick={handleSync}
+            onClick={() => fetchData(true)}
             disabled={syncing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-border bg-[hsl(220_12%_12%)] hover:border-[hsl(220_10%_24%)] hover:text-foreground transition-all text-[11px] font-medium text-muted-foreground disabled:opacity-60"
           >
             <Icon name="RefreshCw" size={11} className={syncing ? "animate-spin" : ""} />
-            {syncing ? "Синхронизация..." : "Обновить"}
+            {syncing ? "Обновление..." : "Обновить"}
           </button>
 
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-peak-low pulse-dot" />
+            <div className={`w-1.5 h-1.5 rounded-full pulse-dot ${error ? "bg-peak-critical" : "bg-peak-low"}`} />
             <span className="text-[10px] font-mono text-muted-foreground">RESTOPLACE</span>
           </div>
         </div>
@@ -330,21 +392,52 @@ export default function Index() {
         </div>
       )}
 
+      {/* Error */}
+      {error && (
+        <div className="px-5 py-2 bg-[hsl(0_50%_10%/0.5)] border-b border-[hsl(0_50%_20%)] text-xs text-peak-critical font-mono shrink-0">
+          ⚠ {error}
+        </div>
+      )}
+
       {/* KPI bar */}
       <div className="grid grid-cols-4 border-b border-border shrink-0">
         {[
-          { label: "Гостей сейчас", value: String(totalGuests), sub: "в зале", icon: "Users", cls: "text-peak-mid" },
-          { label: "Броней сегодня", value: String(BOOKINGS.length), sub: "бронирований", icon: "CalendarCheck", cls: "text-foreground" },
-          { label: "Свободных столов", value: String(freeTables), sub: `из ${TABLES.length}`, icon: "LayoutGrid", cls: "text-peak-low" },
-          { label: "Пик дня", value: `${peakLoad}%`, sub: "в 19:00", icon: "TrendingUp", cls: "text-peak-critical" },
+          {
+            label: "Гостей сейчас",
+            value: String(activeReserves.reduce((s, r) => s + r.guests, 0)),
+            sub: "в зале",
+            icon: "Users",
+            cls: "text-peak-mid",
+          },
+          {
+            label: "Броней сегодня",
+            value: String(stats.total_bookings),
+            sub: "бронирований",
+            icon: "CalendarCheck",
+            cls: "text-foreground",
+          },
+          {
+            label: "Залы",
+            value: String(stats.floors.length),
+            sub: stats.floors.slice(0, 2).join(", ") || "—",
+            icon: "LayoutGrid",
+            cls: "text-peak-low",
+          },
+          {
+            label: "Пик дня",
+            value: peakLoad > 0 ? `${peakLoad}%` : "—",
+            sub: peakHour !== "—" ? `в ${peakHour}:00` : "нет данных",
+            icon: "TrendingUp",
+            cls: peakLoad >= 85 ? "text-peak-critical" : "text-peak-mid",
+          },
         ].map((kpi, i) => (
           <div key={i} className={`px-5 py-3.5 flex items-center gap-3 ${i < 3 ? "border-r border-border" : ""}`}>
             <div className="w-8 h-8 rounded-sm bg-[hsl(220_12%_13%)] flex items-center justify-center shrink-0">
               <Icon name={kpi.icon as "Users"} size={15} className={kpi.cls} />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className={`text-2xl font-black font-mono leading-none ${kpi.cls}`}>{kpi.value}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wide">{kpi.label}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wide truncate">{kpi.label}</div>
             </div>
           </div>
         ))}
@@ -352,54 +445,64 @@ export default function Index() {
 
       {/* Main */}
       <div className="flex-1 grid grid-cols-[1fr_320px] overflow-hidden">
-        {/* Left */}
+        {/* Left: Chart + Active */}
         <div className="flex flex-col border-r border-border overflow-hidden">
-          {/* Chart */}
           <div className="p-5 border-b border-border shrink-0" style={{ height: "240px" }}>
-            <LoadChart />
+            <LoadChart hourlyLoad={hourlyLoad} />
           </div>
 
-          {/* Tables */}
           <div className="flex-1 p-5 overflow-auto">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Карта столиков</span>
-              <div className="flex items-center gap-3">
-                {[
-                  { label: "Свободен", color: "hsl(220 12% 22%)" },
-                  { label: "Забронирован", color: "hsl(43 70% 40%)" },
-                  { label: "Занят", color: "hsl(16 80% 45%)" },
-                ].map((l) => (
-                  <span key={l.label} className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
-                    <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: l.color }}></span>{l.label}
-                  </span>
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Сейчас в зале</span>
+              <span className="font-mono text-xs font-bold text-peak-mid bg-[hsl(43_60%_12%)] px-2 py-0.5 rounded-sm">
+                {activeReserves.length}
+              </span>
+            </div>
+            {loading ? (
+              <div className="flex flex-col gap-1"><SkeletonRows /></div>
+            ) : activeReserves.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-24 text-muted-foreground text-sm">
+                <Icon name="Coffee" size={24} className="mb-2 opacity-30" />
+                Нет активных гостей
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {activeReserves.map((r, i) => (
+                  <BookingRow key={r.id} r={r} delay={i * 35} />
                 ))}
               </div>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {TABLES.map((t, i) => (
-                <TableCard key={t.id} t={t} delay={i * 50} />
-              ))}
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Right: Bookings */}
+        {/* Right: Upcoming */}
         <div className="flex flex-col overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Бронирования</span>
-            <span className="font-mono text-xs font-bold text-primary bg-[hsl(43_60%_12%)] px-2 py-0.5 rounded-sm">{BOOKINGS.length}</span>
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Предстоящие</span>
+            <span className="font-mono text-xs font-bold text-primary bg-[hsl(43_60%_12%)] px-2 py-0.5 rounded-sm">
+              {upcomingReserves.length}
+            </span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
-            {BOOKINGS.map((b, i) => (
-              <BookingRow key={b.id} b={b} delay={i * 35} />
-            ))}
+            {loading ? (
+              <SkeletonRows />
+            ) : upcomingReserves.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-24 text-muted-foreground text-sm">
+                <Icon name="CalendarX" size={24} className="mb-2 opacity-30" />
+                Нет предстоящих броней
+              </div>
+            ) : (
+              upcomingReserves.map((r, i) => (
+                <BookingRow key={r.id} r={r} delay={i * 35} />
+              ))
+            )}
           </div>
 
           <div className="px-4 py-2.5 border-t border-border bg-[hsl(220_14%_8%)] shrink-0">
             <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
               <Icon name="Clock" size={10} />
-              Последнее обновление: {lastSync}
+              Обновлено: {lastSync}
             </div>
           </div>
         </div>
