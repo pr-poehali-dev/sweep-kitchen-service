@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Проверка эндпоинта отчёта",
+      "method": "GET",
+      "path": "/?day=today",
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
