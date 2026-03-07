@@ -151,7 +151,7 @@ def build_text(reserves: list, hourly: dict, date_label: str, is_tomorrow: bool)
         bar = "█" * bar_len + "░" * (10 - bar_len)
         lines.append(f"`{h}:00` {load_emoji(pct)} `{bar}` *{pct}%* ({g} чел)")
 
-    lines += ["", f"_RESTOPLACE · {datetime.now().strftime('%H:%M')}_"]
+    lines += ["", f"_Обновлено: {datetime.now().strftime('%H:%M')}_"]
     return "\n".join(lines)
 
 
@@ -217,6 +217,15 @@ def handler(event: dict, context) -> dict:
         "Access-Control-Allow-Headers": "Content-Type",
         "Content-Type": "application/json",
     }
+
+    # Cron-вызов от планировщика (каждые 10 минут проверяем время МСК 10:00)
+    if event.get("source") == "cron" or event.get("httpMethod") is None:
+        now_utc = datetime.utcnow()
+        now_msk_h = (now_utc.hour + 3) % 24
+        now_msk_m = now_utc.minute
+        if now_msk_h == 10 and now_msk_m < 10:
+            send_report("today")
+        return {"statusCode": 200, "headers": headers, "body": json.dumps({"ok": True, "cron": True})}
 
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": headers, "body": ""}
