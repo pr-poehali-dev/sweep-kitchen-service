@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 
 const API_URL = "https://functions.poehali.dev/0bff2ffe-38a1-4586-a21d-17a71ef8329c";
+const AUTH_URL = "https://functions.poehali.dev/899f3d7c-3e17-42ed-b31d-4d4e2126d50f";
+const AUTH_KEY = "sweep_kitchen_auth";
 
 const HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
 
@@ -78,8 +80,10 @@ function useCurrentTime() {
   return time;
 }
 
-function getTodayStr() {
-  return new Date().toISOString().split("T")[0];
+function getDateStr(offset: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().split("T")[0];
 }
 
 interface NotificationItem {
@@ -87,6 +91,95 @@ interface NotificationItem {
   text: string;
   type: "info" | "warn" | "crit";
 }
+
+// ─── Login Screen ────────────────────────────────────────────────────────────
+
+function LoginScreen({ onAuth }: { onAuth: () => void }) {
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(AUTH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        localStorage.setItem(AUTH_KEY, data.token);
+        onAuth();
+      } else {
+        setError("Неверный пароль");
+      }
+    } catch {
+      setError("Ошибка подключения");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center font-golos">
+      <div className="w-full max-w-sm animate-fade-in">
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src="https://cdn.poehali.dev/projects/71ed05c8-ef08-47c4-bfdb-75714b4901c5/bucket/e76c95a0-0f60-47e0-8992-604a8a445990.png"
+            alt="Sweep"
+            className="w-14 h-14 object-contain mb-4"
+          />
+          <div className="text-center">
+            <div className="flex items-baseline justify-center gap-1">
+              <span className="font-black text-2xl text-foreground tracking-tight">SWEEP</span>
+              <span className="font-black text-2xl text-primary tracking-tight">KITCHEN</span>
+            </div>
+            <p className="text-xs text-muted-foreground font-mono uppercase tracking-widest mt-1">Кухонный монитор</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="relative">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              placeholder="Введите пароль"
+              className="w-full bg-[hsl(220_14%_10%)] border border-border rounded-sm px-4 py-3 text-foreground font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors pr-10"
+              autoFocus
+            />
+            <Icon name="Lock" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-peak-critical text-xs font-mono animate-fade-in">
+              <Icon name="AlertCircle" size={12} />
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || !password}
+            className="w-full bg-primary text-primary-foreground font-bold text-sm py-3 rounded-sm hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <><Icon name="RefreshCw" size={14} className="animate-spin" /> Проверка...</>
+            ) : (
+              <><Icon name="LogIn" size={14} /> Войти</>
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
 
 function Notification({ text, type, onClose }: { text: string; type: "info" | "warn" | "crit"; onClose: () => void }) {
   const colors = {
@@ -108,23 +201,29 @@ function Notification({ text, type, onClose }: { text: string; type: "info" | "w
   );
 }
 
-function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
+// ─── Chart ───────────────────────────────────────────────────────────────────
+
+function LoadChart({ hourlyLoad, isToday }: { hourlyLoad: Record<string, number>; isToday: boolean }) {
   const now = getNow();
   const values = HOURS.map((h) => hourlyLoad[String(h)] ?? 0);
   const maxLoad = Math.max(...values, 1);
   const currentHour = Math.floor(now);
   const currentLoad = hourlyLoad[String(currentHour)] ?? 0;
-  const { label: currentLabel, cls: currentCls } = getLoadLabel(currentLoad);
+  const { label: currentLabel, cls: currentCls } = getLoadLabel(isToday ? currentLoad : 0);
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Загрузка зала / сегодня</span>
-          <div className="flex items-baseline gap-2 mt-0.5">
-            <span className={`text-3xl font-black font-mono ${currentCls}`}>{currentLoad}%</span>
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${currentCls}`}>{currentLabel}</span>
-          </div>
+          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+            Загрузка зала / {isToday ? "сегодня" : "завтра"}
+          </span>
+          {isToday && (
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className={`text-3xl font-black font-mono ${currentCls}`}>{currentLoad}%</span>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${currentCls}`}>{currentLabel}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {[
@@ -155,8 +254,8 @@ function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
             const load = hourlyLoad[String(h)] ?? 0;
             const heightPct = (load / maxLoad) * 100;
             const color = getLoadColor(load);
-            const isPast = h < Math.floor(now);
-            const isCurrent = h === Math.floor(now);
+            const isPast = isToday && h < Math.floor(now);
+            const isCurrent = isToday && h === Math.floor(now);
 
             return (
               <div key={h} className="flex-1 flex flex-col items-center justify-end h-full group cursor-default relative">
@@ -194,6 +293,8 @@ function LoadChart({ hourlyLoad }: { hourlyLoad: Record<string, number> }) {
   );
 }
 
+// ─── Booking Row ──────────────────────────────────────────────────────────────
+
 function BookingRow({ r, delay }: { r: Reserve; delay: number }) {
   const isActive = r.is_active;
 
@@ -208,7 +309,7 @@ function BookingRow({ r, delay }: { r: Reserve; delay: number }) {
     >
       <div className="flex flex-col justify-center">
         <span className={`font-mono font-bold text-sm leading-tight ${isActive ? "text-primary" : "text-foreground"}`}>{r.time}</span>
-        <span className={`text-[9px] uppercase tracking-widest font-bold ${isActive ? "text-peak-mid" : "text-muted-foreground/60"}`}>
+        <span className={`text-[9px] uppercase tracking-widest font-bold ${isActive ? "text-primary" : "text-muted-foreground/60"}`}>
           {r.status_label}
         </span>
       </div>
@@ -240,7 +341,7 @@ function BookingRow({ r, delay }: { r: Reserve; delay: number }) {
       </div>
 
       <div className="flex items-center justify-end">
-        <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-peak-mid pulse-dot" : "bg-[hsl(220_10%_25%)]"}`} />
+        <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-primary pulse-dot" : "bg-[hsl(220_10%_25%)]"}`} />
       </div>
     </div>
   );
@@ -250,11 +351,7 @@ function SkeletonRows() {
   return (
     <>
       {[1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className="px-3 py-2.5 rounded-sm border border-border bg-[hsl(220_12%_10%)] animate-pulse"
-          style={{ animationDelay: `${i * 80}ms` }}
-        >
+        <div key={i} className="px-3 py-2.5 rounded-sm border border-border bg-[hsl(220_12%_10%)] animate-pulse" style={{ animationDelay: `${i * 80}ms` }}>
           <div className="flex gap-3">
             <div className="w-12 h-8 rounded bg-[hsl(220_10%_16%)]" />
             <div className="flex-1 flex flex-col gap-1.5">
@@ -268,8 +365,11 @@ function SkeletonRows() {
   );
 }
 
-export default function Index() {
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
+
+function Dashboard({ onLogout }: { onLogout: () => void }) {
   const time = useCurrentTime();
+  const [dayOffset, setDayOffset] = useState(0); // 0 = сегодня, 1 = завтра
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -277,11 +377,12 @@ export default function Index() {
   const [lastSync, setLastSync] = useState<string>("—");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
-  const fetchData = useCallback(async (showSyncing = false) => {
+  const fetchData = useCallback(async (offset: number, showSyncing = false) => {
     if (showSyncing) setSyncing(true);
+    else setLoading(true);
     try {
-      const today = getTodayStr();
-      const res = await fetch(`${API_URL}?date=${today}`);
+      const dateStr = getDateStr(offset);
+      const res = await fetch(`${API_URL}?date=${dateStr}`);
       const json: ApiResponse = await res.json();
       setData(json);
       setError(null);
@@ -289,37 +390,27 @@ export default function Index() {
       const now = new Date();
       setLastSync(now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
 
-      const notifs: NotificationItem[] = [];
-
-      const loadEntries = Object.entries(json.hourly_load);
-      if (loadEntries.length > 0) {
-        const peakEntry = loadEntries.reduce((max, cur) => (cur[1] > max[1] ? cur : max));
-        if (peakEntry[1] >= 85) {
-          notifs.push({ id: 1, text: `Пик загрузки в ${peakEntry[0]}:00 — ${peakEntry[1]}%`, type: "crit" });
+      if (offset === 0) {
+        const notifs: NotificationItem[] = [];
+        const loadEntries = Object.entries(json.hourly_load);
+        if (loadEntries.length > 0) {
+          const peakEntry = loadEntries.reduce((max, cur) => (cur[1] > max[1] ? cur : max));
+          if (peakEntry[1] >= 85) {
+            notifs.push({ id: 1, text: `Пик загрузки в ${peakEntry[0]}:00 — ${peakEntry[1]}%`, type: "crit" });
+          }
         }
-      }
-
-      const nowMin = now.getHours() * 60 + now.getMinutes();
-      const upcoming30 = json.reserves.filter((r) => {
-        const [hh, mm] = r.time.split(":").map(Number);
-        const diff = hh * 60 + mm - nowMin;
-        return diff > 0 && diff <= 30 && r.guests >= 5;
-      });
-      if (upcoming30.length > 0) {
-        notifs.push({
-          id: 2,
-          text: `${upcoming30[0].name} — ${upcoming30[0].guests} гостей через ~30 мин`,
-          type: "warn",
+        const nowMin = now.getHours() * 60 + now.getMinutes();
+        const upcoming30 = json.reserves.filter((r) => {
+          const [hh, mm] = r.time.split(":").map(Number);
+          const diff = hh * 60 + mm - nowMin;
+          return diff > 0 && diff <= 30 && r.guests >= 5;
         });
+        if (upcoming30.length > 0) {
+          notifs.push({ id: 2, text: `${upcoming30[0].name} — ${upcoming30[0].guests} гостей через ~30 мин`, type: "warn" });
+        }
+        notifs.push({ id: 3, text: `Синхронизировано с RESTOPLACE · ${now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`, type: "info" as const });
+        setNotifications(notifs);
       }
-
-      notifs.push({
-        id: 3,
-        text: `Синхронизировано с RESTOPLACE · ${now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`,
-        type: "info" as const,
-      });
-
-      setNotifications(notifs);
     } catch {
       setError("Не удалось получить данные из RESTOPLACE");
     } finally {
@@ -329,10 +420,14 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(() => fetchData(), 60_000);
+    fetchData(dayOffset);
+  }, [dayOffset, fetchData]);
+
+  useEffect(() => {
+    if (dayOffset !== 0) return;
+    const interval = setInterval(() => fetchData(0), 60_000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [dayOffset, fetchData]);
 
   const removeNotification = (id: number) => setNotifications((prev) => prev.filter((n) => n.id !== id));
 
@@ -344,8 +439,13 @@ export default function Index() {
   const peakLoad = loadValues.length > 0 ? Math.max(...loadValues) : 0;
   const peakHour = Object.entries(hourlyLoad).find(([, v]) => v === peakLoad)?.[0] ?? "—";
 
+  const isToday = dayOffset === 0;
   const activeReserves = reserves.filter((r) => r.is_active);
   const upcomingReserves = reserves.filter((r) => !r.is_active);
+
+  const todayLabel = time.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowLabel = tomorrowDate.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 
   return (
     <div className="min-h-screen bg-background font-golos flex flex-col overflow-hidden" style={{ height: "100dvh" }}>
@@ -364,7 +464,30 @@ export default function Index() {
             </div>
           </div>
           <div className="h-3.5 w-px bg-border" />
-          <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">Кухонный монитор</span>
+
+          {/* Day switcher */}
+          <div className="flex items-center bg-[hsl(220_12%_12%)] rounded-sm border border-border p-0.5">
+            <button
+              onClick={() => setDayOffset(0)}
+              className={`px-3 py-1 rounded-sm text-xs font-mono font-medium transition-all ${
+                isToday
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Сегодня · {todayLabel}
+            </button>
+            <button
+              onClick={() => setDayOffset(1)}
+              className={`px-3 py-1 rounded-sm text-xs font-mono font-medium transition-all ${
+                !isToday
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Завтра · {tomorrowLabel}
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-5">
@@ -378,7 +501,7 @@ export default function Index() {
           </div>
 
           <button
-            onClick={() => fetchData(true)}
+            onClick={() => fetchData(dayOffset, true)}
             disabled={syncing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-border bg-[hsl(220_12%_12%)] hover:border-[hsl(220_10%_24%)] hover:text-foreground transition-all text-[11px] font-medium text-muted-foreground disabled:opacity-60"
           >
@@ -390,11 +513,19 @@ export default function Index() {
             <div className={`w-1.5 h-1.5 rounded-full pulse-dot ${error ? "bg-peak-critical" : "bg-peak-low"}`} />
             <span className="text-[10px] font-mono text-muted-foreground">RESTOPLACE</span>
           </div>
+
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+            title="Выйти"
+          >
+            <Icon name="LogOut" size={14} />
+          </button>
         </div>
       </header>
 
-      {/* Notifications */}
-      {notifications.length > 0 && (
+      {/* Notifications (только для сегодня) */}
+      {isToday && notifications.length > 0 && (
         <div className="px-5 py-1.5 flex flex-col gap-1 border-b border-border bg-[hsl(220_14%_8%)] shrink-0">
           {notifications.map((n) => (
             <Notification key={n.id} text={n.text} type={n.type} onClose={() => removeNotification(n.id)} />
@@ -402,7 +533,6 @@ export default function Index() {
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div className="px-5 py-2 bg-[hsl(0_50%_10%/0.5)] border-b border-[hsl(0_50%_20%)] text-xs text-peak-critical font-mono shrink-0">
           ⚠ {error}
@@ -413,26 +543,14 @@ export default function Index() {
       <div className="grid grid-cols-4 border-b border-border shrink-0">
         {[
           {
-            label: "Гостей сейчас",
-            value: String(activeReserves.reduce((s, r) => s + r.guests, 0)),
-            sub: "в зале",
+            label: isToday ? "Гостей сейчас" : "Гостей забронировано",
+            value: String(isToday ? activeReserves.reduce((s, r) => s + r.guests, 0) : reserves.reduce((s, r) => s + r.guests, 0)),
+            sub: isToday ? "в зале" : "на завтра",
             icon: "Users",
             cls: "text-peak-mid",
           },
-          {
-            label: "Броней сегодня",
-            value: String(stats.total_bookings),
-            sub: "бронирований",
-            icon: "CalendarCheck",
-            cls: "text-foreground",
-          },
-          {
-            label: "Залы",
-            value: String(stats.floors.length),
-            sub: stats.floors.slice(0, 2).join(", ") || "—",
-            icon: "LayoutGrid",
-            cls: "text-peak-low",
-          },
+          { label: "Броней", value: String(stats.total_bookings), sub: isToday ? "сегодня" : "завтра", icon: "CalendarCheck", cls: "text-foreground" },
+          { label: "Залы", value: String(stats.floors.length), sub: stats.floors.slice(0, 2).join(", ") || "—", icon: "LayoutGrid", cls: "text-peak-low" },
           {
             label: "Пик дня",
             value: peakLoad > 0 ? `${peakLoad}%` : "—",
@@ -458,26 +576,28 @@ export default function Index() {
         {/* Left: Chart + Active */}
         <div className="flex flex-col border-r border-border overflow-hidden">
           <div className="p-5 border-b border-border shrink-0" style={{ height: "320px" }}>
-            <LoadChart hourlyLoad={hourlyLoad} />
+            <LoadChart hourlyLoad={hourlyLoad} isToday={isToday} />
           </div>
 
           <div className="flex-1 p-5 overflow-auto">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Сейчас в зале</span>
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                {isToday ? "Сейчас в зале" : "Все брони на завтра"}
+              </span>
               <span className="font-mono text-xs font-bold text-primary bg-[hsl(224_60%_12%)] px-2 py-0.5 rounded-sm">
-                {activeReserves.length}
+                {isToday ? activeReserves.length : reserves.length}
               </span>
             </div>
             {loading ? (
               <div className="flex flex-col gap-1"><SkeletonRows /></div>
-            ) : activeReserves.length === 0 ? (
+            ) : (isToday ? activeReserves : reserves).length === 0 ? (
               <div className="flex flex-col items-center justify-center h-24 text-muted-foreground text-sm">
                 <Icon name="Coffee" size={24} className="mb-2 opacity-30" />
-                Нет активных гостей
+                {isToday ? "Нет активных гостей" : "Нет броней на завтра"}
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                {activeReserves.map((r, i) => (
+                {(isToday ? activeReserves : reserves).map((r, i) => (
                   <BookingRow key={r.id} r={r} delay={i * 35} />
                 ))}
               </div>
@@ -488,22 +608,24 @@ export default function Index() {
         {/* Right: Upcoming */}
         <div className="flex flex-col overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Предстоящие</span>
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+              {isToday ? "Предстоящие" : "По времени"}
+            </span>
             <span className="font-mono text-xs font-bold text-primary bg-[hsl(224_60%_12%)] px-2 py-0.5 rounded-sm">
-              {upcomingReserves.length}
+              {isToday ? upcomingReserves.length : reserves.length}
             </span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1">
             {loading ? (
               <SkeletonRows />
-            ) : upcomingReserves.length === 0 ? (
+            ) : (isToday ? upcomingReserves : reserves).length === 0 ? (
               <div className="flex flex-col items-center justify-center h-24 text-muted-foreground text-sm">
                 <Icon name="CalendarX" size={24} className="mb-2 opacity-30" />
-                Нет предстоящих броней
+                Нет данных
               </div>
             ) : (
-              upcomingReserves.map((r, i) => (
+              (isToday ? upcomingReserves : reserves).map((r, i) => (
                 <BookingRow key={r.id} r={r} delay={i * 35} />
               ))
             )}
@@ -519,4 +641,24 @@ export default function Index() {
       </div>
     </div>
   );
+}
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
+export default function Index() {
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem(AUTH_KEY);
+    setAuthed(!!token);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem(AUTH_KEY);
+    setAuthed(false);
+  };
+
+  if (authed === null) return null;
+  if (!authed) return <LoginScreen onAuth={() => setAuthed(true)} />;
+  return <Dashboard onLogout={handleLogout} />;
 }
