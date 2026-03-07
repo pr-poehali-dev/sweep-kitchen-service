@@ -67,8 +67,8 @@ def build_hourly_load(reserves: list) -> dict:
     if not hourly_guests:
         return {}
 
-    max_guests = max(hourly_guests.values()) or 1
-    return {str(h): round((g / max_guests) * 100) for h, g in sorted(hourly_guests.items())}
+    MAX_CAPACITY = 114
+    return {str(h): min(round((g / MAX_CAPACITY) * 100), 100) for h, g in sorted(hourly_guests.items())}
 
 
 def format_reserve(r: dict) -> dict:
