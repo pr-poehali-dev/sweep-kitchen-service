@@ -151,7 +151,8 @@ def build_text(reserves: list, hourly: dict, date_label: str, is_tomorrow: bool)
         bar = "█" * bar_len + "░" * (10 - bar_len)
         lines.append(f"`{h}:00` {load_emoji(pct)} `{bar}` *{pct}%* ({g} чел)")
 
-    lines += ["", f"_Обновлено: {datetime.now().strftime('%H:%M')}_"]
+    msk_time = datetime.utcnow() + timedelta(hours=3)
+    lines += ["", f"_Обновлено: {msk_time.strftime('%H:%M')} МСК_"]
     return "\n".join(lines)
 
 
