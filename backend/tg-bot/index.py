@@ -20,7 +20,7 @@ RESTOPLACE_API = "https://api.restoplace.cc"
 TELEGRAM_API = "https://api.telegram.org"
 MAX_CAPACITY = 114
 HOURS = list(range(10, 24))
-STATUS_ACTIVE = {1, 2, 3, 4}
+STATUS_ACTIVE = {1, 3, 4}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
