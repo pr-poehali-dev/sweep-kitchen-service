@@ -1,5 +1,5 @@
 """
-Telegram-бот Sweep Kitchen.
+Telegram-бот Sweep Kitchen. v2
 — Webhook: обрабатывает кнопки и команды /start, /report
 — GET ?action=report&day=today|tomorrow — отправка отчёта (используется cron и кнопками)
 """
@@ -248,6 +248,31 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 401, "headers": headers,
                     "body": json.dumps({"ok": False, "error": "Неверный пароль"})}
 
+    # GET ?action=debug — диагностика сырых данных
+    if event.get("httpMethod") == "GET":
+        params = event.get("queryStringParameters") or {}
+        if params.get("action") == "debug":
+            date_str = date.today().strftime("%Y-%m-%d")
+            reserves = fetch_reserves(date_str)
+            summary = []
+            for r in reserves:
+                summary.append({
+                    "id": r.get("id"),
+                    "status": r.get("status"),
+                    "count": r.get("count"),
+                    "time_from": r.get("time_from"),
+                    "time_to": r.get("time_to"),
+                    "name": r.get("name", ""),
+                })
+            by_status = {}
+            for r in reserves:
+                s = str(r.get("status"))
+                by_status.setdefault(s, {"count": 0, "guests": 0})
+                by_status[s]["count"] += 1
+                by_status[s]["guests"] += r.get("count", 0)
+            return {"statusCode": 200, "headers": headers,
+                    "body": json.dumps({"total_records": len(reserves), "by_status": by_status, "records": summary}, ensure_ascii=False)}
+
     # GET ?action=setup — регистрация webhook
     if event.get("httpMethod") == "GET":
         params = event.get("queryStringParameters") or {}
@@ -257,6 +282,25 @@ def handler(event: dict, context) -> dict:
             result = tg_post(token, "setWebhook", {"url": webhook_url, "allowed_updates": ["message", "callback_query"]})
             return {"statusCode": 200, "headers": headers,
                     "body": json.dumps({"ok": True, "webhook": result}, ensure_ascii=False)}
+
+    # GET ?action=debug — сырые данные из Restoplace
+    if event.get("httpMethod") == "GET":
+        params = event.get("queryStringParameters") or {}
+        if params.get("action") == "debug":
+            today_str = date.today().strftime("%Y-%m-%d")
+            reserves = fetch_reserves(today_str)
+            statuses = {}
+            for r in reserves:
+                s = r.get("status")
+                statuses[s] = statuses.get(s, 0) + 1
+            active = [r for r in reserves if r.get("status") in STATUS_ACTIVE]
+            return {"statusCode": 200, "headers": headers, "body": json.dumps({
+                "total_reserves": len(reserves),
+                "status_counts": statuses,
+                "active_reserves": len(active),
+                "total_guests_active": sum(r.get("count", 0) for r in active),
+                "sample": reserves[:5],
+            }, ensure_ascii=False)}
 
     # GET ?day=today|tomorrow — прямой вызов (cron / ручной)
     if event.get("httpMethod") == "GET":
